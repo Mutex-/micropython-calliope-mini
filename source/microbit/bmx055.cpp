@@ -235,3 +235,54 @@ int BMX055Magnetometer::requestUpdate() {
 void BMX055Magnetometer::idleTick() {
     requestUpdate();
 }
+
+// --- BMG160 gyroscope --------------------------------------------------------
+
+#define BMG_CHIPID          0x00
+#define BMG_CHIPID_VAL      0x0F
+#define BMG_RATE_X_LSB      0x02
+#define BMG_RANGE           0x0F
+#define BMG_BW              0x10
+#define BMG_LPM1            0x11
+#define BMG_SOFTRESET       0x14
+#define BMG_SOFTRESET_CMD   0xB6
+#define BMG_RANGE_2000DPS   0x00
+#define BMG_BW_100HZ        0x07   // 100 Hz output rate, 32 Hz filter
+#define BMG_FULL_SCALE_DPS  2000
+
+BMX055Gyroscope::BMX055Gyroscope(MicroBitI2C &_i2c) : i2c(_i2c) {
+    i2c.writeRegister(BMX055_GYRO_ADDR, BMG_SOFTRESET, BMG_SOFTRESET_CMD);
+    wait_ms(30);
+    configure();
+}
+
+int BMX055Gyroscope::isDetected(MicroBitI2C &i2c) {
+    return i2c.readRegister(BMX055_GYRO_ADDR, BMG_CHIPID) == BMG_CHIPID_VAL;
+}
+
+int BMX055Gyroscope::configure() {
+    if (i2c.writeRegister(BMX055_GYRO_ADDR, BMG_LPM1, 0x00) != 0           // normal power mode
+        || i2c.writeRegister(BMX055_GYRO_ADDR, BMG_RANGE, BMG_RANGE_2000DPS) != 0
+        || i2c.writeRegister(BMX055_GYRO_ADDR, BMG_BW, BMG_BW_100HZ) != 0) {
+        return MICROBIT_I2C_ERROR;
+    }
+    return MICROBIT_OK;
+}
+
+int BMX055Gyroscope::read(int out[3]) {
+    uint8_t d[6];
+    if (i2c.readRegister(BMX055_GYRO_ADDR, BMG_RATE_X_LSB, d, 6) != 0) {
+        return MICROBIT_I2C_ERROR;
+    }
+    int raw[3];
+    for (int i = 0; i < 3; ++i) {
+        int16_t v = (int16_t)((d[2 * i + 1] << 8) | d[2 * i]);
+        raw[i] = (int)v * BMG_FULL_SCALE_DPS / 32768;
+    }
+    // The gyroscope shares the accelerometer's axes, so rates are reported around
+    // the same board axes that accelerometer.get_x/y/z() use.
+    for (int i = 0; i < 3; ++i) {
+        out[i] = BMX055_ACC_AXIS_MAP[i][1] * raw[BMX055_ACC_AXIS_MAP[i][0]];
+    }
+    return MICROBIT_OK;
+}

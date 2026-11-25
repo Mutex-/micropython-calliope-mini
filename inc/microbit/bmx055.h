@@ -50,4 +50,19 @@ public:
     virtual void idleTick();
 };
 
+// BMG160 gyroscope part of the BMX055. Not a DAL component: the DAL has no
+// gyroscope API, so MicroPython reads it on demand.
+#define BMX055_GYRO_ADDR            0xD0   // 7-bit 0x68
+
+class BMX055Gyroscope {
+    MicroBitI2C &i2c;
+
+public:
+    BMX055Gyroscope(MicroBitI2C &i2c);
+    static int isDetected(MicroBitI2C &i2c);
+    int configure();
+    // Rotation rate in degrees per second around the accelerometer's x, y, z axes.
+    int read(int out[3]);
+};
+
 #endif // MICROPY_INCLUDED_MICROBIT_BMX055_H

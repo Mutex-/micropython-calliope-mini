@@ -236,6 +236,10 @@ extern volatile bool accelerometer_updating;
 extern const mp_obj_type_t microbit_accelerometer_type;
 extern const struct _microbit_accelerometer_obj_t microbit_accelerometer_obj;
 
+// calliopemini.gyroscope object (Calliope mini v1 BMX055)
+extern const mp_obj_type_t microbit_gyroscope_type;
+extern const struct _microbit_gyroscope_obj_t microbit_gyroscope_obj;
+
 //void microbit_accelerometer_event_handler(const MicroBitEvent *evt);
 
 /****************************************************************/

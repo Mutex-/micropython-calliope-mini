@@ -126,6 +126,7 @@ STATIC const mp_map_elem_t microbit_module_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_button_a), (mp_obj_t)&microbit_button_a_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_button_b), (mp_obj_t)&microbit_button_b_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_accelerometer), (mp_obj_t)&microbit_accelerometer_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_gyroscope), (mp_obj_t)&microbit_gyroscope_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_compass), (mp_obj_t)&microbit_compass_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_audio), (mp_obj_t)&audio_module },
 

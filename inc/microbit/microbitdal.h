@@ -49,5 +49,7 @@ extern MicroBitAccelerometer *ubit_accelerometer;
 extern MicroBitDisplay ubit_display;
 extern MicroBitCompass *ubit_compass;
 extern MicroBitCompassCalibrator *ubit_compass_calibrator;
+class BMX055Gyroscope;
+extern BMX055Gyroscope *ubit_gyroscope;  // NULL if the board has no BMX055
 
 #endif // MICROPY_INCLUDED_MICROBIT_MICROBITDAL_H

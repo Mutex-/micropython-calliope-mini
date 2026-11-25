@@ -18,6 +18,7 @@ MicroPythonI2C ubit_i2c(MICROBIT_PIN_P20, MICROBIT_PIN_P19);
 MicroBitAccelerometer *ubit_accelerometer;
 MicroBitCompass *ubit_compass;
 MicroBitCompassCalibrator *ubit_compass_calibrator;
+BMX055Gyroscope *ubit_gyroscope = NULL;
 
 extern "C" {
 
@@ -146,6 +147,9 @@ int main(void) {
         ubit_compass = new BMX055Magnetometer(ubit_i2c, *ubit_accelerometer, *space);
         MicroBitAccelerometer::detectedAccelerometer = ubit_accelerometer;
         MicroBitCompass::detectedCompass = ubit_compass;
+        if (BMX055Gyroscope::isDetected(ubit_i2c)) {
+            ubit_gyroscope = new BMX055Gyroscope(ubit_i2c);
+        }
     } else {
         ubit_accelerometer = &MicroBitAccelerometer::autoDetect(ubit_i2c);
         ubit_compass = &MicroBitCompass::autoDetect(ubit_i2c);

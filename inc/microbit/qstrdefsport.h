@@ -178,6 +178,8 @@ Q(get_presses)
 
 Q(MicroBitAccelerometer)
 Q(accelerometer)
+Q(MicroBitGyroscope)
+Q(gyroscope)
 Q(get_x)
 Q(get_y)
 Q(get_z)
