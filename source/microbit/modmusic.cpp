@@ -31,6 +31,7 @@ extern "C" {
 #include "py/mphal.h"
 #include "lib/ticker.h"
 #include "lib/pwm.h"
+#include "nrf_gpio.h"
 #include "microbit/modmicrobit.h"
 #include "microbit/modmusic.h"
 
@@ -40,7 +41,10 @@ extern "C" {
 #define DEFAULT_DURATION 4 // Crotchet
 #define ARTICULATION_MS  10 // articulation between notes in milliseconds
 
-#define MUSIC_OUTPUT_DEFAULT_PIN (MP_OBJ_FROM_PTR(&microbit_p0_obj))
+// Calliope mini v1: the onboard speaker sits behind the motor driver. It sounds
+// when the driver is awake (M_SLEEP high), IN2 is low and the tone is on IN1, so
+// IN1 is the default output and the driver is switched on around playback.
+#define MUSIC_OUTPUT_DEFAULT_PIN (MP_OBJ_FROM_PTR(&microbit_m_in1_obj))
 #define MUSIC_OUTPUT_AMPLITUDE_OFF (0)
 #define MUSIC_OUTPUT_AMPLITUDE_ON (128)
 
@@ -82,6 +86,24 @@ static inline int music_output_period_us(uint32_t period) {
     return pwm_set_period_us(period);
 }
 
+// Wake the motor driver for the speaker, or put it back to sleep. Its other two
+// lines are held in music mode meanwhile, so Python code can't fight the tone.
+// Also called from the ticker interrupt when a tune ends: GPIO and mode table only.
+STATIC void speaker_driver_enable(bool on) {
+    if (on) {
+        microbit_obj_pin_acquire(&microbit_m_in2_obj, microbit_pin_mode_music);
+        microbit_obj_pin_acquire(&microbit_m_sleep_obj, microbit_pin_mode_music);
+        nrf_gpio_cfg_output(microbit_m_in2_obj.name);
+        nrf_gpio_pin_clear(microbit_m_in2_obj.name);
+        nrf_gpio_cfg_output(microbit_m_sleep_obj.name);
+        nrf_gpio_pin_set(microbit_m_sleep_obj.name);
+    } else {
+        nrf_gpio_pin_clear(microbit_m_sleep_obj.name);
+        microbit_obj_pin_free(&microbit_m_sleep_obj);
+        microbit_obj_pin_free(&microbit_m_in2_obj);
+    }
+}
+
 STATIC void microbit_pin_audio_select(mp_obj_t select) {
     if (select == mp_const_none) {
         music_data->async_pin = NULL;
@@ -89,10 +111,16 @@ STATIC void microbit_pin_audio_select(mp_obj_t select) {
         const microbit_pin_obj_t *pin = microbit_obj_get_pin(select);
         microbit_obj_pin_acquire(pin, microbit_pin_mode_music);
         music_data->async_pin = pin;
+        if (pin == &microbit_m_in1_obj) {
+            speaker_driver_enable(true);
+        }
     }
 }
 
 STATIC void microbit_pin_audio_free(void) {
+    if (music_data->async_pin == &microbit_m_in1_obj) {
+        speaker_driver_enable(false);
+    }
     microbit_obj_pin_free(music_data->async_pin);
     music_data->async_pin = NULL;
 }
@@ -156,6 +184,7 @@ STATIC void wait_async_music_idle(void) {
         if (MP_STATE_VM(mp_pending_exception) != MP_OBJ_NULL) {
             music_data->async_state = ASYNC_MUSIC_STATE_IDLE;
             music_output_amplitude(MUSIC_OUTPUT_AMPLITUDE_OFF);
+            microbit_pin_audio_free();  // also puts the speaker driver back to sleep
             break;
         }
     }
@@ -395,6 +424,9 @@ STATIC mp_obj_t microbit_music_pitch(mp_uint_t n_args, const mp_obj_t *pos_args,
     if (frequency == 0 || music_output_period_us(1000000 / frequency)) {
         if (music_data->async_pin != NULL) {
             pwm_release(music_data->async_pin->name);
+            if (music_data->async_pin == &microbit_m_in1_obj) {
+                speaker_driver_enable(false);
+            }
             music_data->async_pin = NULL;
         }
         if (frequency != 0) {
