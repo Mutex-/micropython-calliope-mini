@@ -49,8 +49,9 @@ STATIC mp_obj_t microbit_i2c_init(mp_uint_t n_args, const mp_obj_t *pos_args, mp
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
 
-    PinName p_sda = I2C_SDA0;
-    PinName p_scl = I2C_SCL0;
+    // Calliope mini v1 I2C pads (pin20/pin19), shared with the onboard BMX055.
+    PinName p_sda = MICROBIT_PIN_P20;
+    PinName p_scl = MICROBIT_PIN_P19;
 
     if (args[1].u_obj != mp_const_none) {
         p_sda = (PinName)microbit_obj_get_pin_name(args[1].u_obj);

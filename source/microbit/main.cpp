@@ -4,12 +4,15 @@
 #include "microbit/filesystem.h"
 #include "microbit/microbitdal.h"
 #include "MicroBitButton.h"
+#include "MicroBitPin.h"
+#include "microbit/bmx055.h"
 
 // Global instances of the mbed/DAL components that we use
-gpio_t reset_button_gpio;
-gpio_irq_t reset_button_gpio_irq;
 MicroBitDisplay ubit_display;
-MicroPythonI2C ubit_i2c(I2C_SDA0, I2C_SCL0);
+// Calliope mini v1: the onboard sensors and the I2C pads are on P0.20 (SDA) and
+// P0.19 (SCL). I2C_SDA0/I2C_SCL0 are the micro:bit's P0.30/P0.0, which on the
+// Calliope are the motor driver's IN2 line and pad P0.
+MicroPythonI2C ubit_i2c(MICROBIT_PIN_P20, MICROBIT_PIN_P19);
 
 // Global pointers to instances of DAL components that are created dynamically
 MicroBitAccelerometer *ubit_accelerometer;
@@ -27,13 +30,6 @@ extern "C" {
 #include "lib/utils/pyexec.h"
 #include "microbit/modmicrobit.h"
 #include "microbit/modmusic.h"
-
-void reset_button_handler(uint32_t data, gpio_irq_event event) {
-    (void)data;
-    if (event == IRQ_FALL) {
-        microbit_reset();
-    }
-}
 
 void microbit_ticker(void) {
     // Update compass if it is calibrating, but not if it is still
@@ -139,15 +135,21 @@ typedef struct _appended_script_t {
 #define APPENDED_SCRIPT ((const appended_script_t*)microbit_mp_appended_script())
 
 int main(void) {
-    // Configure the soft reset button
-    gpio_init_in(&reset_button_gpio, MICROBIT_PIN_BUTTON_RESET);
-    gpio_mode(&reset_button_gpio, PullUp);
-    gpio_irq_init(&reset_button_gpio_irq, MICROBIT_PIN_BUTTON_RESET, &reset_button_handler, 1 /* dummy, must be non-zero */);
-    gpio_irq_set(&reset_button_gpio_irq, IRQ_FALL, 1);
+    // No soft reset button: the micro:bit's MICROBIT_PIN_BUTTON_RESET (P0.19) is the
+    // I2C clock line on the Calliope mini, whose reset button resets the chip directly.
 
-    // Create dynamically-allocated DAL components
-    ubit_accelerometer = &MicroBitAccelerometer::autoDetect(ubit_i2c);
-    ubit_compass = &MicroBitCompass::autoDetect(ubit_i2c);
+    // Create dynamically-allocated DAL components. The Calliope mini v1 has a
+    // Bosch BMX055, which the DAL's autoDetect() doesn't know.
+    if (BMX055Accelerometer::isDetected(ubit_i2c) && BMX055Magnetometer::isDetected(ubit_i2c)) {
+        CoordinateSpace *space = new CoordinateSpace(SIMPLE_CARTESIAN, true, COORDINATE_SPACE_ROTATED_0);
+        ubit_accelerometer = new BMX055Accelerometer(ubit_i2c, *space);
+        ubit_compass = new BMX055Magnetometer(ubit_i2c, *ubit_accelerometer, *space);
+        MicroBitAccelerometer::detectedAccelerometer = ubit_accelerometer;
+        MicroBitCompass::detectedCompass = ubit_compass;
+    } else {
+        ubit_accelerometer = &MicroBitAccelerometer::autoDetect(ubit_i2c);
+        ubit_compass = &MicroBitCompass::autoDetect(ubit_i2c);
+    }
     ubit_compass_calibrator = new MicroBitCompassCalibrator(*ubit_compass, *ubit_accelerometer, ubit_display);
 
     for (;;) {
