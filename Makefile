@@ -22,8 +22,26 @@ $(HEX_FINAL): yotta $(VER_ADDR_FILE)
 	tools/adduicr.py $(HEX_SRC) 0x$$(cat $(VER_ADDR_FILE)) -o $(HEX_FINAL)
 	@arm-none-eabi-size $(HEX_SRC:.hex=)
 
-yotta: $(MBIT_VER_FILE) $(QSTR_STAMP)
+yotta: fix-depfile-flags $(MBIT_VER_FILE) $(QSTR_STAMP)
 	@yotta build
+
+# yotta's mbed-gcc target sets the dependency-file flags with CMake's pre-3.20
+# placeholder <DEPFILE>. CMake 3.20+ doesn't expand it, so every compile wrote
+# its header list to one file literally named "DEPFILE", ninja recorded no
+# header dependencies, and changing a header recompiled nothing. Switch the
+# downloaded target to the current placeholder (it's re-downloaded by yotta, so
+# this runs before every build), and rebuild from clean the first time.
+MBED_GCC_COMPILER_FILES = $(wildcard yotta_targets/mbed-gcc/CMake/Compiler/GNU-*.cmake)
+
+.PHONY: fix-depfile-flags
+fix-depfile-flags:
+	@for f in $(MBED_GCC_COMPILER_FILES); do \
+	    if grep -q '<DEPFILE>' "$$f"; then \
+	        sed -i 's/<DEPFILE>/<DEP_FILE>/' "$$f"; \
+	        echo "fixed header dependency tracking in $$f, removing $(TARGET_BUILD)"; \
+	        rm -rf $(TARGET_BUILD); \
+	    fi; \
+	done
 
 # The scan preprocesses every source, and modos.c includes the generated
 # version header, so that must exist first. Order-only (after the |): the

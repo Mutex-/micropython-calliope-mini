@@ -6,9 +6,11 @@
 #
 # - Table unchanged: the old header is put back with its original timestamp,
 #   so nothing gets recompiled.
-# - Table changed: <build-dir> is removed. New names shift every qstr number,
-#   and an incremental build keeps some objects compiled against the old
-#   table; that firmware hangs at boot without a REPL.
+# - Table changed: <build-dir> is removed. New names shift every qstr number
+#   and nearly every object includes the table, so a full rebuild is due
+#   anyway; starting clean guarantees no object keeps the old numbering.
+#   (Before the Makefile fixed header dependency tracking, an incremental
+#   build did exactly that, and the firmware hung at boot without a REPL.)
 
 BUILD_DIR="$1"
 GEN=inc/genhdr/qstrdefs.generated.h
