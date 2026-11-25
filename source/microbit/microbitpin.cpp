@@ -37,7 +37,9 @@ extern "C" {
 const microbit_pin_obj_t microbit_p0_obj = {{&microbit_dig_pin_type}, 0, MICROBIT_PIN_P0, MODE_UNUSED};
 const microbit_pin_obj_t microbit_p1_obj = {{&microbit_touch_pin_type}, 1, MICROBIT_PIN_P1, MODE_UNUSED};
 const microbit_pin_obj_t microbit_p2_obj = {{&microbit_touch_pin_type}, 2, MICROBIT_PIN_P2, MODE_UNUSED};
-const microbit_pin_obj_t microbit_p3_obj = {{&microbit_dig_pin_type},   3,  MICROBIT_PIN_P3, MODE_DISPLAY};
+// P0.3 is not part of the Calliope's LED matrix (columns P0.4-P0.12, rows P0.13-P0.15).
+// It is analog input 4 and shared with the microphone (pin_MIC).
+const microbit_pin_obj_t microbit_p3_obj = {{&microbit_ad_pin_type},   3,  MICROBIT_PIN_P3, MODE_UNUSED};
 const microbit_pin_obj_t microbit_p4_obj = {{&microbit_ad_pin_type},   4,  MICROBIT_PIN_P4, MODE_DISPLAY};
 const microbit_pin_obj_t microbit_p5_obj = {{&microbit_ad_pin_type},   5,  MICROBIT_PIN_P5, MODE_DISPLAY};
 const microbit_pin_obj_t microbit_p6_obj = {{&microbit_ad_pin_type},  6,  MICROBIT_PIN_P6, MODE_DISPLAY};
@@ -147,12 +149,36 @@ mp_obj_t microbit_pin_write_analog(mp_obj_t self_in, mp_obj_t value_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_2(microbit_pin_write_analog_obj, microbit_pin_write_analog);
 
+// nRF51 analog input number for a GPIO, or -1. mbed's own ADC pin table only lists
+// P0.1-P0.6 and calls error() (a hard hang) for anything else, so the Calliope's
+// pin16 (P0.26, AIN0) and pin17 (P0.27, AIN1) need this.
+static int analog_input_for_gpio(uint8_t gpio) {
+    switch (gpio) {
+        case 26: return 0;
+        case 27: return 1;
+        case 1: case 2: case 3: case 4: case 5: case 6: return gpio + 1;
+        default: return -1;
+    }
+}
+
 mp_obj_t microbit_pin_read_analog(mp_obj_t self_in) {
     microbit_pin_obj_t *self = (microbit_pin_obj_t*)self_in;
+    int ain = analog_input_for_gpio(self->name);
+    if (ain < 0) {
+        mp_raise_ValueError("pin has no analog input");
+    }
     microbit_obj_pin_acquire(self, microbit_pin_mode_unused);
-    analogin_t obj;
-    analogin_init(&obj, (PinName)self->name);
-    int val = analogin_read_u16(&obj);
+    // Same configuration as mbed's analogin_init(): 10 bit, input and reference at 1/3.
+    NRF_ADC->ENABLE = ADC_ENABLE_ENABLE_Enabled;
+    NRF_ADC->CONFIG = (ADC_CONFIG_RES_10bit << ADC_CONFIG_RES_Pos) |
+                      (ADC_CONFIG_INPSEL_AnalogInputOneThirdPrescaling << ADC_CONFIG_INPSEL_Pos) |
+                      (ADC_CONFIG_REFSEL_SupplyOneThirdPrescaling << ADC_CONFIG_REFSEL_Pos) |
+                      ((1UL << ain) << ADC_CONFIG_PSEL_Pos) |
+                      (ADC_CONFIG_EXTREFSEL_None << ADC_CONFIG_EXTREFSEL_Pos);
+    NRF_ADC->TASKS_START = 1;
+    while (NRF_ADC->BUSY & ADC_BUSY_BUSY_Msk) {
+    }
+    int val = NRF_ADC->RESULT;
     NRF_ADC->ENABLE = ADC_ENABLE_ENABLE_Disabled;
     return mp_obj_new_int(val);
 }
